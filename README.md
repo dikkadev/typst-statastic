@@ -14,7 +14,7 @@ A library to calculate statistics for numerical data in typst.
 
 ## Usage
 
-To use the package you can import it through this command `import "@preview/statastical:0.1.0": *` (as soon as the pull request ist accepted). The documentation is found in the `docs.pdf` in the development [repo](https://github.com/Sett17/typst-statastic)
+To use the package you can import it through this command `import "@preview/statastical:1.0.0": *` (as soon as the pull request ist accepted). The documentation is found in the `docs.pdf` in the development [repo](https://github.com/dikkadev/typst-statastic)
 
 ## License
 

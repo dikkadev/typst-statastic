@@ -89,12 +89,12 @@
 #let arrayMedian(arr) = {
   let col = tofloatArray(arr).sorted()
   let len = col.len()
-  if (calc.rem(len, 2) == 0) {
+  if calc.rem(len, 2) == 0 {
     let middle = calc.quo(len, 2)
     (col.at(middle - 1) + col.at(middle)) / 2
   } else {
-    let middle = calc.quo(len, 2) - 1
-    col.at(middle-1)
+    let middle = calc.quo(len, 2)
+    col.at(middle)
   }
 }
 
@@ -256,3 +256,337 @@
     "95percentile": percentile(data, colId, 0.95),
   )
 }
+
+/// Calculates the covariance between two arrays' elements.
+///
+/// - arrX (array): First array of numbers.
+/// - arrY (array): Second array of numbers.
+/// -> float
+#let arrayCovariance(arrX, arrY) = {
+  let x = tofloatArray(arrX)
+  let y = tofloatArray(arrY)
+  let n = x.len()
+
+  if n != y.len() {
+    error("Arrays must have the same length")
+  }
+
+  let meanX = arrayAvg(x)
+  let meanY = arrayAvg(y)
+  let covSum = 0.0
+
+  for ((xi, yi)) in x.zip(y) {
+    covSum += (xi - meanX) * (yi - meanY)
+  }
+
+  covSum / (n - 1)
+}
+
+/// Performs quadratic regression on two arrays of data.
+/// Fits the model [$ y = a x^{2} + b x + c $].
+/// Returns a dictionary with keys "a", "b", "c", and "r_squared".
+///
+/// - arrX (array): Array of independent variable values.
+/// - arrY (array): Array of dependent variable values.
+/// -> dictionary with keys "slope", "intercept", "r_squared"
+#let arrayLinearRegression(arrX, arrY) = {
+  let x = tofloatArray(arrX)
+  let y = tofloatArray(arrY)
+  let n = x.len()
+
+  if n != y.len() {
+    error("Arrays must have the same length")
+  }
+
+  let meanX = arrayAvg(x)
+  let meanY = arrayAvg(y)
+  let varX = arrayVar(x)
+  let covXY = arrayCovariance(x, y)
+  let slope = covXY / varX
+  let intercept = meanY - slope * meanX
+
+  // Compute R-squared
+  let totalSS = 0.0
+  let residualSS = 0.0
+
+  for ((xi, yi)) in x.zip(y) {
+    let yPred = intercept + slope * xi
+    totalSS += calc.pow(yi - meanY, 2)
+    residualSS += calc.pow(yi - yPred, 2)
+  }
+
+  let r_squared = 1 - residualSS / totalSS
+
+  (
+    "slope": slope,
+    "intercept": intercept,
+    "r_squared": r_squared,
+  )
+}
+
+/// Performs linear regression on two columns in a dataset.
+///
+/// - data (array): The dataset.
+/// - colX (int): The column index for the independent variable.
+/// - colY (int): The column index for the dependent variable.
+/// -> dictionary with keys "slope", "intercept", "r_squared"
+#let linearRegression(data, colX, colY) = {
+  let x = extractColumn(data, colX)
+  let y = extractColumn(data, colY)
+  arrayLinearRegression(x, y)
+}
+
+/// Performs exponential regression on two arrays of data.
+/// Fits the model [$ y = a e^{b x} $].
+/// Returns a dictionary with keys "a", "b", and "r_squared".
+///
+/// - arrX (array): Array of independent variable values.
+/// - arrY (array): Array of dependent variable values.
+/// -> dictionary
+#let arrayQuadraticRegression(arrX, arrY) = {
+  let x = tofloatArray(arrX)
+  let y = tofloatArray(arrY)
+  let n = x.len()
+
+  if n != y.len() {
+    error("Arrays must have the same length")
+  }
+
+  // Compute sums needed for the normal equations
+  let sumX = x.sum()
+  let sumY = y.sum()
+  let sumXX = x.map(xi => xi * xi).sum()
+  let sumXXX = x.map(xi => calc.pow(xi, 3)).sum()
+  let sumXXXX = x.map(xi => calc.pow(xi, 4)).sum()
+  let sumXY = x.zip(y).map(((xi, yi)) => xi * yi).sum()
+  let sumXXY = x.zip(y).map(((xi, yi)) => calc.pow(xi, 2) * yi).sum()
+
+  // Build the matrices for the normal equations
+  let Sxx = sumXX - (sumX * sumX) / n
+  let Sxy = sumXY - (sumX * sumY) / n
+  let Sxx2 = sumXXX - (sumXX * sumX) / n
+  let Sx2x2 = sumXXXX - (sumXX * sumXX) / n
+  let Sx2y = sumXXY - (sumXX * sumY) / n
+
+  // Calculate the coefficients
+  let denom = Sxx * Sx2x2 - calc.pow(Sxx2, 2)
+  if denom == 0 {
+    error("Denominator in quadratic regression is zero")
+  }
+
+  let a = (Sx2y * Sxx - Sxy * Sxx2) / denom
+  let b = (Sxy * Sx2x2 - Sx2y * Sxx2) / denom
+  let c = (sumY - b * sumX - a * sumXX) / n
+
+  // Compute R-squared
+  let y_mean = sumY / n
+  let totalSS = y.map(yi => calc.pow(yi - y_mean, 2)).sum()
+  let residualSS = x.zip(y).map(((xi, yi)) => {
+    let yi_pred = a * calc.pow(xi, 2) + b * xi + c
+    calc.pow(yi - yi_pred, 2)
+  }).sum()
+  let r_squared = 1 - residualSS / totalSS
+
+  (
+    "a": a,
+    "b": b,
+    "c": c,
+    "r_squared": r_squared,
+  )
+}
+
+/// Performs quadratic regression on two columns in a dataset.
+/// Returns a dictionary with keys "a", "b", "c", and "r_squared".
+///
+/// - data (array): The dataset.
+/// - colX (int): The column index for the independent variable.
+/// - colY (int): The column index for the dependent variable.
+/// -> dictionary
+#let quadraticRegression(data, colX, colY) = {
+  let x = extractColumn(data, colX)
+  let y = extractColumn(data, colY)
+  arrayQuadraticRegression(x, y)
+}
+
+/// Performs logarithmic regression on two arrays of data.
+/// Fits the model [$ y = a + b \ln(x) $].
+/// Returns a dictionary with keys "a", "b", and "r_squared".
+///
+/// - arrX (array): Array of independent variable values.
+/// - arrY (array): Array of dependent variable values.
+/// -> dictionary
+#let arrayExponentialRegression(arrX, arrY) = {
+  let x = tofloatArray(arrX)
+  let y = tofloatArray(arrY)
+  let n = x.len()
+
+  if n != y.len() {
+    error("Arrays must have the same length")
+  }
+
+  // Transform y by taking the natural logarithm
+  let lnY = y.map(yi => calc.ln(yi))
+
+  // Now perform linear regression on x and lnY
+  let meanX = arrayAvg(x)
+  let meanLnY = arrayAvg(lnY)
+  let varX = arrayVar(x)
+  let covXY = arrayCovariance(x, lnY)
+
+  let b = covXY / varX
+  let lnA = meanLnY - b * meanX
+  let a = calc.exp(lnA)
+
+  // Compute R-squared
+  let y_pred = x.map(xi => a * calc.exp(b * xi))
+  let totalSS = y.map(yi => calc.pow(yi - arrayAvg(y), 2)).sum()
+  let residualSS = y.zip(y_pred).map(((yi, ypi)) => calc.pow(yi - ypi, 2)).sum()
+  let r_squared = 1 - residualSS / totalSS
+
+  (
+    "a": a,
+    "b": b,
+    "r_squared": r_squared,
+  )
+}
+
+/// Performs exponential regression on two columns in a dataset.
+/// Returns a dictionary with keys "a", "b", and "r_squared".
+///
+/// - data (array): The dataset.
+/// - colX (int): The column index for the independent variable.
+/// - colY (int): The column index for the dependent variable.
+/// -> dictionary
+#let exponentialRegression(data, colX, colY) = {
+  let x = extractColumn(data, colX)
+  let y = extractColumn(data, colY)
+  arrayExponentialRegression(x, y)
+}
+
+
+///////////////////////////
+
+/// Performs logarithmic regression on two arrays of data.
+/// Fits the model [$ y = a + b \ln(x) $].
+/// Returns a dictionary with keys "a", "b", and "r_squared".
+///
+/// - arrX (array): Array of independent variable values (must be > 0).
+/// - arrY (array): Array of dependent variable values.
+/// -> dictionary
+#let arrayLogarithmicRegression(arrX, arrY) = {
+  let x = tofloatArray(arrX)
+  let y = tofloatArray(arrY)
+  let n = x.len()
+
+  if n != y.len() {
+    error("Arrays must have the same length")
+  }
+
+  // Check that x values are greater than zero
+  if x.any(xi => xi <= 0) {
+    error("All x values must be greater than zero for logarithmic regression")
+  }
+
+  // Transform x by taking the natural logarithm
+  let lnX = x.map(xi => calc.ln(xi))
+
+  // Now perform linear regression on lnX and y
+  let meanLnX = arrayAvg(lnX)
+  let meanY = arrayAvg(y)
+  let varLnX = arrayVar(lnX)
+  let covXY = arrayCovariance(lnX, y)
+
+  let b = covXY / varLnX
+  let a = meanY - b * meanLnX
+
+  // Compute R-squared
+  let y_pred = lnX.map(xi => a + b * xi)
+  let totalSS = y.map(yi => calc.pow(yi - meanY, 2)).sum()
+  let residualSS = y.zip(y_pred).map(((yi, ypi)) => calc.pow(yi - ypi, 2)).sum()
+  let r_squared = 1 - residualSS / totalSS
+
+  (
+    "a": a,
+    "b": b,
+    "r_squared": r_squared,
+  )
+}
+
+/// Performs logarithmic regression on two columns in a dataset.
+/// Returns a dictionary with keys "a", "b", and "r_squared".
+///
+/// - data (array): The dataset.
+/// - colX (int): The column index for the independent variable (must be > 0).
+/// - colY (int): The column index for the dependent variable.
+/// -> dictionary
+#let logarithmicRegression(data, colX, colY) = {
+  let x = extractColumn(data, colX)
+  let y = extractColumn(data, colY)
+  arrayLogarithmicRegression(x, y)
+}
+
+
+///////////////////////////////////////
+
+
+/// Performs power regression on two arrays of data.
+/// Fits the model [$ y = a x^{b} $].
+/// Returns a dictionary with keys "a", "b", and "r_squared".
+///
+/// - arrX (array): Array of independent variable values (must be > 0).
+/// - arrY (array): Array of dependent variable values (must be > 0).
+/// -> dictionary
+#let arrayPowerRegression(arrX, arrY) = {
+  let x = tofloatArray(arrX)
+  let y = tofloatArray(arrY)
+  let n = x.len()
+
+  if n != y.len() {
+    error("Arrays must have the same length")
+  }
+
+  // Check that x and y values are greater than zero
+  if x.any(xi => xi <= 0) or y.any(yi => yi <= 0) {
+    error("All x and y values must be greater than zero for power regression")
+  }
+
+  // Transform both x and y by taking the natural logarithm
+  let lnX = x.map(xi => calc.ln(xi))
+  let lnY = y.map(yi => calc.ln(yi))
+
+  // Now perform linear regression on lnX and lnY
+  let meanLnX = arrayAvg(lnX)
+  let meanLnY = arrayAvg(lnY)
+  let varLnX = arrayVar(lnX)
+  let covXY = arrayCovariance(lnX, lnY)
+
+  let b = covXY / varLnX
+  let lnA = meanLnY - b * meanLnX
+  let a = calc.exp(lnA)
+
+  // Compute R-squared
+  let y_pred = x.map(xi => a * calc.pow(xi, b))
+  let totalSS = y.map(yi => calc.pow(yi - arrayAvg(y), 2)).sum()
+  let residualSS = y.zip(y_pred).map(((yi, ypi)) => calc.pow(yi - ypi, 2)).sum()
+  let r_squared = 1 - residualSS / totalSS
+
+  (
+    "a": a,
+    "b": b,
+    "r_squared": r_squared,
+  )
+}
+
+/// Performs power regression on two columns in a dataset.
+/// Returns a dictionary with keys "a", "b", and "r_squared".
+///
+/// - data (array): The dataset.
+/// - colX (int): The column index for the independent variable (must be > 0).
+/// - colY (int): The column index for the dependent variable (must be > 0).
+/// -> dictionary
+#let powerRegression(data, colX, colY) = {
+  let x = extractColumn(data, colX)
+  let y = extractColumn(data, colY)
+  arrayPowerRegression(x, y)
+}
+

@@ -7,7 +7,7 @@ on:
 
 env:
   FILES_TO_SYNC: README.md LICENSE typst.toml lib.typ
-  TARGET_DIR: packages/preview/statastic-0.1.0
+  TARGET_DIR: packages/preview/statastic/1.0.0
 
 jobs:
   sync:
@@ -17,7 +17,7 @@ jobs:
     - name: Checkout package repo
       uses: actions/checkout@v2
       with:
-        repository: Sett17/packages
+        repository: dikkadev/packages
         token: ${{ secrets.CI_PUSH_TOKEN }}
         fetch-depth: 0
 
